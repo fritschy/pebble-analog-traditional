@@ -43,17 +43,12 @@ static unsigned int get_time(void)
    } while (0)
 #endif
 
-typedef struct {
-   char day[3];
-   uint8_t mon;
-   uint8_t dow;
-} DateInfo;
-
 static Window *window;
 static Layer *effect_layer;
 static GRect bounds;
 static GPoint center;
 static GFont font;
+static char day[3];
 
 typedef struct {
    int32_t width;
@@ -74,12 +69,10 @@ static void draw_simple_hand(GContext *ctx, HandInfo hi) {
    };
 
    GPoint p1 = {
-       sin * hi.tail_len / TRIG_MAX_RATIO + center.x,
-      -cos * hi.tail_len / TRIG_MAX_RATIO + center.y,
+       sin * -hi.tail_len / TRIG_MAX_RATIO + center.x,
+      -cos * -hi.tail_len / TRIG_MAX_RATIO + center.y,
    };
 
-   graphics_context_set_stroke_width(ctx, hi.width);
-   graphics_context_set_stroke_color(ctx, hi.color);
    graphics_draw_line(ctx, p0, p1);
 }
 
@@ -116,54 +109,48 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
    }
    graphics_fill_circle(ctx, center, radius - 10);
 
-   char day[3];
-   snprintf(day, sizeof day, "%2d", tm->tm_mday);
    graphics_context_set_text_color(ctx, GColorLightGray);
    graphics_draw_text(ctx, day, font, GRect(144/2+35, 168/2-12,20,20), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
 
    // draw hands
+   graphics_context_set_stroke_color(ctx, GColorBlack);
+   graphics_context_set_stroke_width(ctx, 5);
    draw_simple_hand(ctx,
          (HandInfo){
-            .width = 5,
             .main_len = radius - 40,
             .tail_len = 0,
             .angle = TRIG_MAX_ANGLE * (hr * 60 + min) / (12 * 60),
-            .center = center,
-            .color = GColorBlack});
+            .center = center});
    draw_simple_hand(ctx,
          (HandInfo){
-            .width = 5,
             .main_len = radius - 13,
             .tail_len = 0,
             .angle = TRIG_MAX_ANGLE * min / 60,
-            .center = center,
-            .color = GColorBlack});
+            .center = center});
 
+   graphics_context_set_stroke_color(ctx, GColorWhite);
+   graphics_context_set_stroke_width(ctx, 3);
    draw_simple_hand(ctx,
          (HandInfo){
-            .width = 3,
             .main_len = radius - 40,
             .tail_len = 0,
             .angle = TRIG_MAX_ANGLE * (hr * 60 + min) / (12 * 60),
-            .center = center,
-            .color = GColorWhite});
+            .center = center});
    draw_simple_hand(ctx,
          (HandInfo){
-            .width = 3,
             .main_len = radius - 13,
             .tail_len = 0,
             .angle = TRIG_MAX_ANGLE * min / 60,
-            .center = center,
-            .color = GColorWhite});
+            .center = center});
 
+   graphics_context_set_stroke_color(ctx, GColorRajah);
+   graphics_context_set_stroke_width(ctx, 1);
    draw_simple_hand(ctx,
          (HandInfo){
-            .width = 1,
             .main_len = radius - 7,
-            .tail_len = -9,
+            .tail_len = 9,
             .angle = TRIG_MAX_ANGLE * sec / 60,
-            .center = center,
-            .color = GColorRajah});
+            .center = center});
 
    // center screw...
    graphics_context_set_fill_color(ctx, GColorRajah);
@@ -189,6 +176,9 @@ static void window_unload(Window *window) {
 
 static void handle_tick(struct tm *tick_time, TimeUnits units_changed) {
    layer_mark_dirty(effect_layer);
+   if (units_changed & DAY_UNIT) {
+      snprintf(day, sizeof day, "%d", (int) tick_time->tm_mday);
+   }
 }
 
 static void init(void) {
@@ -200,6 +190,10 @@ static void init(void) {
                               });
    font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
    window_stack_push(window, true);
+
+   time_t t = time(NULL);
+   struct tm *tm = localtime(&t);
+   snprintf(day, sizeof day, "%d", (int) tm->tm_mday);
 }
 
 static void deinit(void) { window_destroy(window); }
