@@ -85,15 +85,45 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
    int32_t min = tm->tm_min;
    int32_t hr = tm->tm_hour;
 
-   int radius = 144 / 2 - 5;
+   const int radius = 144 / 2 - 5;
+   const int minlen = radius - 12;
 
+   // background
    graphics_context_set_fill_color(ctx, GColorBlack);
    graphics_fill_rect(ctx, bounds, 0, 0);
-   graphics_context_set_stroke_color(ctx, GColorWhite);
+
+   // clock face
    graphics_context_set_fill_color(ctx, GColorDarkGray);
    graphics_fill_circle(ctx, center, radius);
+
+   // small second/minute ticks
+   graphics_context_set_stroke_color(ctx, GColorLightGray);
+   graphics_context_set_stroke_width(ctx, 1);
+   for (int i = 0; i < 60; i++) {
+      int angle = TRIG_MAX_ANGLE * i / 60;
+      int32_t sin = sin_lookup(angle);
+      int32_t cos = cos_lookup(angle);
+
+      GPoint p1 = {
+         sin * radius / TRIG_MAX_RATIO + center.x,
+         -cos * radius / TRIG_MAX_RATIO + center.y,
+      };
+
+      GPoint p0 = {
+         sin * (radius - 4) / TRIG_MAX_RATIO + center.x,
+         -cos * (radius - 4) / TRIG_MAX_RATIO + center.y,
+      };
+
+      graphics_draw_line(ctx, p0, p1);
+   }
+   //graphics_fill_circle(ctx, center, radius - 6);
+
+   // face rim
+   graphics_context_set_stroke_color(ctx, GColorWhite);
    graphics_context_set_stroke_width(ctx, 5);
    graphics_draw_circle(ctx, center, radius+2);
+
+   // hour ticks
    graphics_context_set_stroke_width(ctx, 3);
    for (int i = 0; i < 12; i++) {
       int angle = TRIG_MAX_ANGLE * i / 12;
@@ -105,14 +135,30 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
          -cos * radius / TRIG_MAX_RATIO + center.y,
       };
 
-      graphics_draw_line(ctx, center, p1);
+      GPoint p0 = {
+         sin * minlen / TRIG_MAX_RATIO + center.x,
+         -cos * minlen / TRIG_MAX_RATIO + center.y,
+      };
+
+      graphics_draw_line(ctx, p0, p1);
    }
-   graphics_fill_circle(ctx, center, radius - 10);
+   graphics_fill_circle(ctx, center, radius - 9);
 
+   const int dayx = 102;
+   const int dayy = 113;
+
+   // circle for day of month
+   graphics_context_set_fill_color(ctx, GColorBlack);
+   graphics_fill_circle(ctx, GPoint(dayx, dayy), 10);
+   graphics_context_set_stroke_width(ctx, 1);
+   graphics_context_set_stroke_color(ctx, GColorLightGray);
+   graphics_draw_circle(ctx, GPoint(dayx, dayy), 10);
+
+   // day of month
    graphics_context_set_text_color(ctx, GColorLightGray);
-   graphics_draw_text(ctx, day, font, GRect(144/2+35, 168/2-12,20,20), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+   graphics_draw_text(ctx, day, font, GRect(dayx-10, dayy-8,20,20), GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 
-   // draw hands
+   // outline of minute and hour hand
    graphics_context_set_stroke_color(ctx, GColorBlack);
    graphics_context_set_stroke_width(ctx, 5);
    draw_simple_hand(ctx,
@@ -128,6 +174,7 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
             .angle = TRIG_MAX_ANGLE * min / 60,
             .center = center});
 
+   // minute and hour hand
    graphics_context_set_stroke_color(ctx, GColorWhite);
    graphics_context_set_stroke_width(ctx, 3);
    draw_simple_hand(ctx,
@@ -143,6 +190,23 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
             .angle = TRIG_MAX_ANGLE * min / 60,
             .center = center});
 
+   // minute and hour hand 'fill'
+   graphics_context_set_stroke_color(ctx, GColorLightGray);
+   graphics_context_set_stroke_width(ctx, 1);
+   draw_simple_hand(ctx,
+         (HandInfo){
+            .main_len = radius - 40,
+            .tail_len = 0,
+            .angle = TRIG_MAX_ANGLE * (hr * 60 + min) / (12 * 60),
+            .center = center});
+   draw_simple_hand(ctx,
+         (HandInfo){
+            .main_len = radius - 13,
+            .tail_len = 0,
+            .angle = TRIG_MAX_ANGLE * min / 60,
+            .center = center});
+
+   // second hand
    graphics_context_set_stroke_color(ctx, GColorRajah);
    graphics_context_set_stroke_width(ctx, 1);
    draw_simple_hand(ctx,
@@ -152,9 +216,10 @@ static void update_effect_layer(Layer *l, GContext *ctx) {
             .angle = TRIG_MAX_ANGLE * sec / 60,
             .center = center});
 
-   // center screw...
+   // center of second hand
    graphics_context_set_fill_color(ctx, GColorRajah);
    graphics_fill_circle(ctx, center, 3);
+   // center screw
    graphics_context_set_fill_color(ctx, GColorBlack);
    graphics_fill_circle(ctx, center, 2);
 
@@ -188,7 +253,7 @@ static void init(void) {
                               (WindowHandlers){
                                  .load = window_load, .unload = window_unload,
                               });
-   font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+   font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SANS_13));
    window_stack_push(window, true);
 
    time_t t = time(NULL);
@@ -196,7 +261,10 @@ static void init(void) {
    snprintf(day, sizeof day, "%d", (int) tm->tm_mday);
 }
 
-static void deinit(void) { window_destroy(window); }
+static void deinit(void) {
+   window_destroy(window);
+   fonts_unload_custom_font(font);
+}
 
 int main(void) {
    init();
